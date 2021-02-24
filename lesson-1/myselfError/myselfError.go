@@ -10,6 +10,11 @@ type ErrorWithTime struct {
 	time string
 }
 
+func StartMyselfError() {
+	err := New("my error")
+	fmt.Println(err)
+}
+
 func New(text string) error {
 	return &ErrorWithTime{
 		text: text,
@@ -19,10 +24,4 @@ func New(text string) error {
 
 func (e *ErrorWithTime) Error() string {
 	return fmt.Sprintf("error: %s\ntime:\n%s", e.text, e.time)
-}
-
-func StartMyselfError() {
-
-	err := New("my error")
-	fmt.Println(err)
 }

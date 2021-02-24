@@ -27,10 +27,8 @@ func main() {
 
 	// задание3
 	if err := creatingFile.CreatingNewFile(); err != nil {
-		if err != nil {
-			fmt.Println("Error function:", err)
-			os.Exit(1)
-		}
+		fmt.Println("Error function:", err)
+		os.Exit(1)
 	}
 
 }

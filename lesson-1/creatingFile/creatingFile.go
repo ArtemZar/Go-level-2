@@ -6,20 +6,19 @@ import (
 )
 
 func CreatingNewFile() error {
-
 	newFile, err := os.Create("newFile.txt")
 	if err != nil {
 		return err
 	}
 
-	defer newFile.Close()
-	_, _ = fmt.Fprintln(newFile, "data")
-
-	if err := newFile.Close(); err != nil {
+	defer func() {
+		err := newFile.Close()
 		if err != nil {
-			return err
+			fmt.Println("File is not close")
 		}
-	}
+	}()
+
+	_, _ = fmt.Fprintln(newFile, "data")
 
 	return err
 }
