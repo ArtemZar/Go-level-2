@@ -5,59 +5,53 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
-
 )
 
 func main() {
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
 
 	signalChannel := make(chan os.Signal, 1)
-
 	signal.Notify(signalChannel, syscall.SIGTERM)
 
-	fmt.Println("waiting signal for kill process ", os.Getpid())
+	doneCh := make(chan error)
 
-	workersJob()
+	go func() {
+		doneCh <- longJobFunction()
+	}()
 
-	// остановка программы по сигналу. workersJob завершает счет.
-	 go func() {
+	// имитация сигнала kill с задержкой
+	go func() {
+		time.Sleep(3 * time.Second)
+		signalChannel <- syscall.SIGTERM
+		fmt.Println("сигнал kill отправлен в канал")
+	}()
+
+	select {
+	case <-ctx.Done():
 		sig := <-signalChannel
 		fmt.Printf("\ncaught the signal: %v\n", sig)
-		fmt.Println("exit aftet 1 second")
-
-
-	}()
-
-	// имитация сигнала kill
-	go func() {
-		defer func() {
-		signalChannel<-syscall.SIGTERM
-		}()
-	}()
-
-	time.Sleep(1 * time.Second)
+		fmt.Println("сработал контекст таймаут")
+	case <-doneCh:
+	}
 }
 
-// workersJob имитация деятельности, счет от 1 до 10
+// longJobFunction имитация долгой деятельности (счетчик с задержкой в секунду)
 //
-// пне принимает не возвращает никаких значений
-func workersJob() {
-	var workers = make(chan struct{}, 1)
-
-	for i := 1; i <= 10; i++ {
-		workers <- struct{}{}
-
-		go func(job int){
-			defer func() {
-				<-workers
-			}()
-
-			time.Sleep(1 * time.Second)
-			fmt.Print(job, " ")
-		}(i)
+// позвращает error
+func longJobFunction() error {
+	fmt.Println("start longJobFunction")
+	fmt.Println("waiting signal for kill process ", os.Getpid())
+	for i := 1; i <= 20; i++ {
+		fmt.Println(i)
+		time.Sleep(1 * time.Second)
 	}
+	fmt.Println("finish longJobFunction")
+	return nil
 }
