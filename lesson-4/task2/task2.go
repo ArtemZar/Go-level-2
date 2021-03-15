@@ -1,7 +1,3 @@
-/*
-Написать программу, которая при получении в канал сигнала SIGTERM
-останавливается не позднее, чем за одну секунду (установить таймаут).
-*/
 package main
 
 import (
@@ -14,37 +10,33 @@ import (
 )
 
 func main() {
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
-	defer cancel()
+	ctx := context.Background()
+	var cancel context.CancelFunc
 
+	longJobFunctionDoneCh := make(chan error)
+	go func(ctx context.Context, cancel context.CancelFunc) {
+		longJobFunctionDoneCh <- longJobFunction()
+	}(ctx, cancel)
+
+	// имитация сигнала  kill
 	signalChannel := make(chan os.Signal, 1)
 	signal.Notify(signalChannel, syscall.SIGTERM)
-
-	doneCh := make(chan error)
-
-	go func() {
-		doneCh <- longJobFunction()
-	}()
-
-	// имитация сигнала kill с задержкой
-	go func() {
-		time.Sleep(3 * time.Second)
-		signalChannel <- syscall.SIGTERM
-		fmt.Println("сигнал kill отправлен в канал")
-	}()
+	time.Sleep(5 * time.Second)
+	signalChannel <- syscall.SIGTERM
+	
+	<-signalChannel
+	ctx, cancel = context.WithTimeout(ctx, 1*time.Second)
+	defer cancel()
 
 	select {
 	case <-ctx.Done():
-		sig := <-signalChannel
-		fmt.Printf("\ncaught the signal: %v\n", sig)
 		fmt.Println("сработал контекст таймаут")
-	case <-doneCh:
+	case <-longJobFunctionDoneCh:
 	}
 }
 
-// longJobFunction имитация долгой деятельности (счетчик с задержкой в секунду)
+// longJobFunction функция с длительным временем работы
 //
-// позвращает error
 func longJobFunction() error {
 	fmt.Println("start longJobFunction")
 	fmt.Println("waiting signal for kill process ", os.Getpid())
