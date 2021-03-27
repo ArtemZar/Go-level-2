@@ -23,9 +23,11 @@ package main
 import (
 	"flag"
 	"fmt"
+	"hash/crc32"
 	"io/ioutil"
 	"log"
 	"os"
+	"runtime"
 	"strings"
 	"sync"
 )
@@ -34,6 +36,7 @@ type FileList struct {
 	FileName string
 	FilePath string
 	FileSize int64
+	FileHash uint32
 }
 
 var (
@@ -56,7 +59,6 @@ func init() {
 
 func main() {
 	ListDirByReadDir(*Path)
-
 	FindDubleFiles()
 
 	if *del && deletedFiles != nil {
@@ -75,12 +77,16 @@ func ListDirByReadDir(path string) {
 	mu := sync.Mutex{}
 	lst, err := ioutil.ReadDir(path)
 	if err != nil {
-		panic(err)
+		log.Fatal(err)
 	}
 	for _, val := range lst {
 		if !val.IsDir() {
+			hs, err := getHash(path + "/" + val.Name())
+			if err != nil {
+				log.Fatal(err)
+			}
 			mu.Lock()
-			theFile := FileList{val.Name(), path, val.Size()}
+			theFile := FileList{val.Name(), path, val.Size(), hs}
 			FindFiles = append(FindFiles, theFile)
 			mu.Unlock()
 		} else {
@@ -88,6 +94,7 @@ func ListDirByReadDir(path string) {
 			wg.Add(1)
 			go func() {
 				ListDirByReadDir(path + "/" + val.Name())
+				runtime.Gosched()
 				wg.Done()
 			}()
 			wg.Wait()
@@ -95,9 +102,24 @@ func ListDirByReadDir(path string) {
 	}
 }
 
+// getHash функция расчитывает хэш файла.
+//
+// принимает на вход имя файла (тип string)
+//
+// возвращает расчитаное значение (тип uint32)
+func getHash(filename string) (uint32, error) {
+	bs, err := ioutil.ReadFile(filename)
+	if err != nil {
+		return 0, err
+	}
+	h := crc32.NewIEEE()
+	h.Write(bs)
+	return h.Sum32(), nil
+}
+
 // FindDubleFiles функция анализирует срез FindFiles на наличие дубликатов
 //
-// сравнение производится по полям структуры имя файла (FileName) и размер файла (FileSize)
+// сравнение производится по полям структуры имя файла (FileName), размер файла (FileSize), хеш файла (FileHash)
 //
 // не принимает аргументы
 //
@@ -111,7 +133,9 @@ func FindDubleFiles() {
 		go func(ex int, vol FileList) {
 			for i := ex + 1; i < len(FindFiles); i++ {
 
-				if vol.FileName == FindFiles[i].FileName && vol.FileSize == FindFiles[i].FileSize {
+				if vol.FileName == FindFiles[i].FileName &&
+					vol.FileSize == FindFiles[i].FileSize &&
+					vol.FileHash == FindFiles[i].FileHash {
 					fmt.Println("Найдены дубликаты файлов:")
 					fmt.Printf("ID: %d; File name: %v; File Path: %v; File Size: %d\n", ex, vol.FileName, vol.FilePath, vol.FileSize)
 					fmt.Printf("ID: %d; File name: %v; File Path: %v; File Size: %d\n", i, FindFiles[i].FileName, FindFiles[i].FilePath, FindFiles[i].FileSize)
